@@ -1,0 +1,72 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar-sev
+data:
+  my_script.sh: |
+    #!/usr/bin/env python3
+    import xml.etree.ElementTree as ET
+    import os.path
+    import sys
+    
+    def update_xml(xml):
+        root = ET.fromstring(xml)
+
+        """
+        Update os part
+        Original: <loader readonly='yes' secure='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE.secboot.fd</loader>
+        Expected: <loader type='rom' stateless='yes'>/usr/share/edk2/ovmf/OVMF.amdsev.fd</loader>
+        """
+        os = root.find('os')
+        os_loader = os.find('loader')
+        if os_loader is None:
+            os_loader = ET.Element('loader')
+            os.append('loader')
+        os_loader.text = "/usr/share/edk2/ovmf/OVMF.amdsev.fd"
+        os_loader.set('type', 'rom')
+        os_loader.set('stateless', 'yes')
+        os_loader.attrib.pop('readonly', None)
+        os_loader.attrib.pop('secure', None)
+        for nvram in os.findall('nvram'):
+            os.remove(nvram)
+
+        """
+        Add launchSecurity part
+        <launchSecurity type='sev-snp'>
+          <cbitpos>51</cbitpos>
+          <reducedPhysBits>1</reducedPhysBits>
+          <policy>0x00030000</policy>
+        </launchSecurity>
+        """
+        launch_security = root.find('launchSecurity')
+        if launch_security is None:
+            launch_security = ET.Element('launchSecurity')
+            root.append(launch_security)
+        launch_security.set('type', 'sev-snp')
+
+        cbitpos = launch_security.find('cbitpos')
+        if cbitpos is None:
+            cbitpos = ET.Element('cbitpos')
+            launch_security.append(cbitpos)
+        cbitpos.text = '51'
+
+        reduced_physbits = launch_security.find('reducedPhysBits')
+        if reduced_physbits is None:
+            reduced_physbits = ET.Element('reducedPhysBits')
+            launch_security.append(reduced_physbits)
+        reduced_physbits.text = '1'
+
+        policy = launch_security.find('policy')
+        if policy is None:
+            policy = ET.Element('policy')
+            launch_security.append(policy)
+        policy.text = '0x00030000'
+
+        ET.dump(root)
+
+    def main(xml):
+        update_xml(xml)
+    
+    if __name__ == "__main__":
+        main(sys.argv[4])
