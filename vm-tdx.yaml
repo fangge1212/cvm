@@ -1,0 +1,77 @@
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    kubevirt.io/os: linux
+  name: tdx-vm1
+spec:
+  dataVolumeTemplates:
+  - apiVersion: cdi.kubevirt.io/v1beta1
+    kind: DataVolume
+    metadata:
+      creationTimestamp: null
+      name: pvc-tdx-vm1
+    spec:
+      source:
+        http:
+          url: <replace_with_vm_image_url>
+      storage:
+        resources:
+          requests:
+            storage: 30Gi
+        storageClassName: hostpath-csi-local
+  architecture: amd64
+  running: true
+  template:
+    metadata:
+      annotations:
+        hooks.kubevirt.io/hookSidecars: '[{"args": ["--version", "v1alpha2"],
+          "configMap": {"name": "sidecar-tdx", "key": "my_script.sh", "hookPath": "/usr/bin/onDefineDomain"}}]'
+    spec:
+      domain:
+        cpu:
+          cores: 1
+          maxSockets: 4
+          model: host-model
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: rootdisk
+          interfaces:
+          - masquerade: {}
+            model: virtio
+            name: default
+          networkInterfaceMultiqueue: true
+          # Graphics device makes tdx vm crash in openshift virtualization env,
+          # so we disable it here.(Not reproducible in pure libvirt env)
+          autoattachGraphicsDevice: false
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: false
+        firmware:
+          bootloader:
+            efi:
+              secureBoot: false
+        machine:
+          type: q35
+        memory:
+          guest: 2Gi
+        resources:
+          requests:
+            memory: 2Gi
+      evictionStrategy: None
+      hostname: tdx-example
+      networks:
+      - name: default
+        pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - dataVolume:
+          name: pvc-tdx-vm1
+        name: rootdisk

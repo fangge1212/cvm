@@ -1,0 +1,113 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar-tdx
+data:
+  tdx.sh: |
+    #!/usr/bin/env python3
+    import xml.etree.ElementTree as ET
+    import os.path
+    import sys
+    
+    def update_xml(xml):
+        root = ET.fromstring(xml)
+
+        # Update cpu part
+        cpu = root.find('cpu')
+        cpu.set('check', 'partial')
+        cpu.set('mode', 'host-passthrough')
+
+        cpu_model = cpu.find('model')
+        if cpu_model is not None:
+            cpu.remove(cpu_model)
+
+        cpu_vendor = cpu.find('vendor')
+        if cpu_vendor is not None:
+            cpu.remove(cpu_vendor)
+
+        for feature in cpu.findall('feature'):
+            cpu.remove(feature)
+
+        vcpus = root.find('vcpus')
+        if vcpus:
+            root.remove(vcpus)
+
+        # Set ioapic driver to qemu
+        features = root.find('features')
+        ioapic = features.find('ioapic')
+        if ioapic is None:
+            ioapic = ET.Element('ioapic')
+            features.insert(-1, ioapic)
+        ioapic.set('driver', 'qemu')
+
+        """
+        Update os part
+        Current: <loader readonly='yes' secure='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE.secboot.fd</loader>
+        Expected: <loader> /usr/share/edk2/ovmf/OVMF.inteltdx.fd</loader>
+        """
+        os = root.find('os')
+        os_loader = os.find('loader')
+        if os_loader is None:
+            os_loader = ET.Element('loader')
+            os.append(os_loader)
+        os_loader.text = "/usr/share/edk2/ovmf/OVMF.inteltdx.fd"
+        #os_loader.set('type', 'rom')
+        #os_loader.set('stateless', 'yes')
+        os_loader.attrib.pop('readonly', None)
+        os_loader.attrib.pop('secure', None)
+        os_loader.attrib.pop('type', None)
+        for nvram in os.findall('nvram'):
+            os.remove(nvram)
+        os_type = os.find('type')
+        if os_type:
+            os_type.set('machine', 'q35')
+
+        """
+        Update clock part
+        """
+        clock = root.find('clock')
+        if clock is None:
+            clock = ET.Element('clock')
+            root.append(clock)
+
+        hpet_disabled = 'no'
+        for timer in clock.findall('timer'):
+            if timer.get('name') == hpet:
+                timer.set('present', 'no')
+                hpet_disabled = 'yes'
+                break
+        if hpet_disabled == 'no':
+            timer = ET.Element('timer')
+            timer.set('name', 'hpet')
+            timer.set('present', 'no')
+            clock.append(timer)
+
+        """
+        Add launchSecurity part
+        <launchSecurity type='tdx'>
+        </launchSecurity>
+        """
+        launch_security = ET.Element('launchSecurity')
+        launch_security.set('type', 'tdx')
+        root.insert(-1, launch_security)
+        policy = ET.Element('policy')
+        policy.text = '0x10000000'
+        launch_security.insert(-1, policy)
+
+        """
+        Remove vga video device because it makes vm crash, libvirt 
+        will generate a cirrus video device automatically
+        """
+        devices = root.find('devices')
+        video = devices.find('video')
+        if video is not None:
+            devices.remove(video)
+
+        ET.dump(root)
+
+    def main(xml):
+        update_xml(xml)
+    
+    if __name__ == "__main__":
+        main(sys.argv[4])
