@@ -1,0 +1,59 @@
+# Use the current image used in the cluster as base image
+FROM <replace_with_virt-launcher_image_url_along_with_the_sha256>
+
+# Backup the files
+RUN cp /bin/node-labeller.sh /tmp/node-labeller.sh && \
+    cp /usr/bin/container-disk /tmp/container-disk && \
+    cp /etc/libvirt/virtqemud.conf /tmp/virtqemud.conf && \
+    cp /etc/libvirt/qemu.conf /tmp/qemu.conf
+
+RUN cp /usr/bin/virt-freezer /tmp/virt-freezer && \
+    cp /usr/bin/virt-launcher-monitor /tmp/virt-launcher-monitor && \
+    cp /usr/bin/virt-launcher /tmp/virt-launcher && \
+    cp /usr/bin/virt-probe /tmp/virt-probe && \
+    cp /usr/bin/virt-tail /tmp/virt-tail
+
+# Update the libvirt related packages
+COPY rhel.repo /etc/yum.repos.d/rhel.repo
+RUN PKGS="nettle qemu-kvm-core libvirt-daemon-driver-qemu libvirt-client selinux-policy selinux-policy-targeted socat xorriso sudo edk2-ovmf nftables procps-ng tar gnutls" && \
+    PKGS="$PKGS qemu-kvm-device-display-virtio-gpu qemu-kvm-device-display-virtio-gpu-pci virtiofsd" && \
+    BEST_EFFORT_PKGS="qemu-kvm-device-usb-redirect" && \
+    dnf --skip-broken -y --setopt=tsflags=nodocs update -y $PKGS $BEST_EFFORT_PKGS && \
+    dnf clean all && \
+    test $(id -u qemu) = 107 && \
+    mkdir -p /usr/share/kubevirt/virt-launcher
+
+RUN rpm -e --nodeps tzdata && \
+    dnf -y --setopt=tsflags=nodocs install tzdata
+
+RUN cp /tmp/node-labeller.sh /bin/node-labeller.sh && \
+    cp /tmp/container-disk /usr/bin/container-disk && \
+    cp /tmp/virtqemud.conf /etc/libvirt/virtqemud.conf && \
+    cp /tmp/qemu.conf /etc/libvirt/qemu.conf
+
+RUN cp /tmp/virt-freezer /usr/bin/virt-freezer && \
+    cp /tmp/virt-launcher-monitor /usr/bin/virt-launcher-monitor && \
+    cp /tmp/virt-launcher /usr/bin/virt-launcher && \
+    cp /tmp/virt-probe /usr/bin/virt-probe && \
+    cp /tmp/virt-tail /usr/bin/virt-tail
+
+RUN setcap 'cap_net_bind_service+eip' /usr/bin/virt-launcher && \
+    setcap 'cap_net_bind_service+eip' /usr/bin/virt-launcher-monitor && \
+    chmod o+rx /etc/libvirt
+
+RUN mkdir -p /var/lib/swtpm-localca /run/var/lib/swtpm-localca && \
+    chown -R qemu:qemu /var/lib/swtpm-localca /run/var/lib/swtpm-localca
+
+# Create this symbol link for amd sev to work
+RUN ln -s /usr/share/edk2/ovmf/OVMF_CODE.cc.fd /usr/share/OVMF/OVMF_CODE.cc.fd
+
+ENTRYPOINT [ "/usr/bin/virt-launcher-monitor" ]
+
+LABEL com.redhat.component="virt-launcher-rhel9-container" \
+    name="container-native-virtualization/virt-launcher-rhel9" \
+    summary="Hosts VM processes" \
+    io.openshift.expose-services="" \
+    io.openshift.tags="cnv,kubevirt,VM" \
+    io.k8s.display-name="virt-launcher" \
+    maintainer="<author>@redhat.com" \
+    description="Customize the CNV virt-launcher"
