@@ -1,0 +1,28 @@
+# Use the current image used in the cluster as base image
+FROM <replace_with_virt-launcher_image_url_along_with_the_sha256>
+
+# Backup the files
+RUN cp /usr/bin/container-disk /tmp/container-disk && \
+    cp /virt_launcher.cil /tmp/virt_launcher.cil && \
+    cp /usr/bin/virt-handler /tmp/virt-handler && \
+    cp /usr/bin/virt-chroot /tmp/virt-chroot
+
+# Update the libvirt related packages
+COPY rhel.repo /etc/yum.repos.d/rhel.repo
+RUN dnf update -y libvirt-libs iproute nftables procps-ng gnutls && dnf clean all
+
+RUN cp /tmp/container-disk /usr/bin/container-disk && \
+    cp /tmp/virt_launcher.cil /virt_launcher.cil && \
+    cp /tmp/virt-handler /usr/bin/virt-handler && \
+    cp /tmp/virt-chroot /usr/bin/virt-chroot
+
+ENTRYPOINT [ "/usr/bin/virt-handler" ]
+
+LABEL com.redhat.component="virt-handler-rhel9-container" \
+    name="container-native-virtualization/virt-handler-rhel9" \
+    summary="Virtualization handler" \
+    io.openshift.expose-services="" \
+    io.openshift.tags="cnv,kubevirt" \
+    io.k8s.display-name="virt-handler" \
+    maintainer="<author>@redhat.com" \
+    description="Customize the CNV virt-handler"
