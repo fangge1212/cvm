@@ -4,6 +4,8 @@ metadata:
   name: hostpath-csi-local
 provisioner: kubevirt.io.hostpath-provisioner
 parameters:
+  # The storage pool used in the yaml file should be the one
+  # created by hostPath provisioner
   storagePool: hpp-csi-local
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
