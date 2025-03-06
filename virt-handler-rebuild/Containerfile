@@ -1,5 +1,5 @@
 # Use the current image used in the cluster as base image
-FROM <replace_with_virt-launcher_image_url_along_with_the_sha256>
+FROM <replace_with_virt-handler_image_url_along_with_the_sha256>
 
 # Backup the files
 RUN cp /usr/bin/container-disk /tmp/container-disk && \
