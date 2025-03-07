@@ -1,0 +1,59 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: tdx-vm-ephemeral
+  namespace: default
+spec:
+  runStrategy: Always
+  template:
+    metadata:
+      annotations:
+        hooks.kubevirt.io/hookSidecars: '[{"args": ["--version", "v1alpha2"],
+          "configMap": {"name": "sidecar-tdx", "key": "my_script.sh", "hookPath": "/usr/bin/onDefineDomain"}}]'
+    spec:
+      domain:
+        cpu:
+          cores: 1
+          maxSockets: 4
+          model: host-model
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: rootdisk
+          interfaces:
+          - masquerade: {}
+            model: virtio
+            name: default
+          networkInterfaceMultiqueue: true
+          # Graphics device makes tdx vm crash in openshift virtualization env,
+          # so we disable it here.(Not reproducible in pure libvirt env)
+          autoattachGraphicsDevice: false
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: false
+        firmware:
+          bootloader:
+            efi:
+              secureBoot: false
+        machine:
+          type: q35
+        memory:
+          guest: 2Gi
+        resources:
+          requests:
+            memory: 2Gi
+      evictionStrategy: None
+      hostname: tdx-vm-ephemeral
+      networks:
+      - name: default
+        pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - containerDisk:
+          image: <example.com>/<my_repo>/<my_vm_image>:<tag>
+        name: rootdisk1
