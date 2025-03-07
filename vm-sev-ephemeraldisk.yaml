@@ -1,0 +1,63 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: sev-vm-ephemeral
+  namespace: default
+spec:
+  runStrategy: Always
+  template:
+    metadata:
+      annotations:
+        hooks.kubevirt.io/hookSidecars: '[{"args": ["--version", "v1alpha2"],
+          "configMap": {"name": "sidecar-sev", "key": "my_script.sh", "hookPath": "/usr/bin/onDefineDomain"}}]'
+      creationTimestamp: null
+    spec:
+      architecture: amd64
+      domain:
+        cpu:
+          cores: 1
+          maxSockets: 4
+          model: host-model
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: rootdisk1
+          interfaces:
+          - macAddress: 02:7e:83:00:00:09
+            masquerade: {}
+            model: virtio
+            name: default
+          networkInterfaceMultiqueue: true
+          rng: {}
+        features:
+          acpi:
+            enabled: true
+          smm:
+            enabled: false
+        firmware:
+          bootloader:
+            efi:
+              secureBoot: false
+          uuid: 5937a362-3012-55b4-b6b0-7b23c3cda4bf
+        launchSecurity:
+          sev: {}
+        machine:
+          type: q35
+        memory:
+          guest: 2Gi
+        resources:
+          requests:
+            memory: 2Gi
+      evictionStrategy: None
+      hostname: sev-vm-ephemeral
+      networks:
+      - name: default
+        pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - containerDisk:
+          image: <example.com>/<my_repo>/<my_vm_image>:<tag>
+        name: rootdisk1
